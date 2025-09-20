@@ -277,7 +277,7 @@ const PotdTracker = () => {
           <div className="flex gap-2">
             <button
               onClick={() => setDarkMode(!darkMode)}
-              className={`p-3 rounded-full transition-all ${
+              className={`p-3 rounded-full transition-all cursor-pointer ${
                 darkMode ? 'bg-gray-800 hover:bg-gray-700' : 'bg-white hover:bg-gray-50'
               } shadow-lg`}
             >
@@ -305,7 +305,7 @@ const PotdTracker = () => {
             
             <button
               onClick={exportData}
-              className={`p-3 rounded-full transition-all ${
+              className={`p-3 rounded-full transition-all cursor-pointer ${
                 darkMode ? 'bg-gray-800 hover:bg-gray-700' : 'bg-white hover:bg-gray-50'
               } shadow-lg`}
               title="Export Data"
@@ -315,7 +315,7 @@ const PotdTracker = () => {
             
             <button
               onClick={clearAllData}
-              className={`p-3 rounded-full transition-all ${
+              className={`p-3 rounded-full transition-all cursor-pointer  ${
                 darkMode ? 'bg-red-900 hover:bg-red-800' : 'bg-red-50 hover:bg-red-100'
               } shadow-lg text-red-600`}
               title="Clear All Data"
@@ -325,7 +325,7 @@ const PotdTracker = () => {
             
             <button
               onClick={() => setShowUpload(!showUpload)}
-              className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-full font-medium shadow-lg hover:shadow-xl transform hover:scale-105 transition-all"
+              className="cursor-pointer flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-full font-medium shadow-lg hover:shadow-xl transform hover:scale-105 transition-all"
             >
               <Upload className="w-4 h-4" />
               Add Problems
@@ -449,11 +449,11 @@ const TodayProblemCard: React.FC<TodayProblemCardProps> = ({ problem, onComplete
             </div>
             <button
                 onClick={() => onComplete(problem.id)}
-                className="group flex items-center gap-2 px-8 py-4 bg-gradient-to-r from-green-500 to-green-600 text-white rounded-full font-medium shadow-lg hover:shadow-2xl hover:shadow-green-500/30 transform hover:scale-105 transition-all duration-300 relative overflow-hidden"
+                className="cursor-pointer group flex items-center gap-2 px-8 py-4 bg-gradient-to-r from-green-500 to-green-600 text-white rounded-full font-medium shadow-lg hover:shadow-2xl hover:shadow-green-500/30 transform hover:scale-105 transition-all duration-300 relative overflow-hidden"
             >
                 <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -skew-x-12 -translate-x-full group-hover:translate-x-full transition-transform duration-1000" />
                 <CheckCircle2 className="w-5 h-5 group-hover:rotate-[360deg] transition-transform duration-500" />
-                <span className="relative z-10">Mark as Complete</span>
+                <span className="relative z-10 ">Mark as Complete</span>
             </button>
         </div>
     </div>
@@ -516,7 +516,7 @@ const ProblemHistoryItem: React.FC<ProblemHistoryItemProps> = ({ problem, index,
                     <span className="text-sm font-medium">Completed</span>
                 </div>
             ) : (
-                <button onClick={() => onComplete(problem.id)} className="group px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white text-sm rounded-lg transition-all transform hover:scale-105">
+                <button onClick={() => onComplete(problem.id)} className="cursor-pointer group px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white text-sm rounded-lg transition-all transform hover:scale-105">
                     Mark Done
                 </button>
             )}
