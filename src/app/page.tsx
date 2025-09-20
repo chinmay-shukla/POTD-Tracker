@@ -1,3 +1,4 @@
+'use client'
 import React, { useState, useEffect } from 'react';
 import { CheckCircle2, Trophy, Target, Calendar, Upload, Star, Flame, TrendingUp, Moon, Sun, LucideProps, RotateCcw } from 'lucide-react';
 import confetti from 'canvas-confetti';
