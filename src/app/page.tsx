@@ -1,103 +1,506 @@
-import Image from "next/image";
+import React, { useState, useEffect } from 'react';
+import { CheckCircle2, Trophy, Target, Calendar, Upload, Star, Flame, TrendingUp, Moon, Sun } from 'lucide-react';
+import confetti from 'canvas-confetti';
 
-export default function Home() {
+// --- Interfaces ---
+interface Problem {
+  id: string;
+  title: string;
+  url: string;
+  platform: string;
+  completed: boolean;
+  completedDate?: string;
+}
+
+interface Stats {
+  currentStreak: number;
+  longestStreak: number;
+  totalCompleted: number;
+  lastCompletedDate?: string;
+}
+
+
+// --- Main Component ---
+const PotdTracker = () => {
+  // --- State Management ---
+  const [problems, setProblems] = useState<Problem[]>([]);
+  const [stats, setStats] = useState<Stats>({
+    currentStreak: 0,
+    longestStreak: 0,
+    totalCompleted: 0
+  });
+  const [showUpload, setShowUpload] = useState(false);
+  const [problemInput, setProblemInput] = useState('');
+  const [darkMode, setDarkMode] = useState(false);
+
+  // --- Local Storage Hooks ---
+  const saveToStorage = (key: string, data: any) => {
+    try {
+      localStorage.setItem(key, JSON.stringify(data));
+    } catch (error) {
+      console.error(`❌ Failed to save ${key}:`, error);
+      alert('Storage quota exceeded! Consider clearing old data.');
+    }
+  };
+
+  const loadFromStorage = (key: string, defaultValue: any) => {
+    try {
+      const saved = localStorage.getItem(key);
+      if (saved) {
+        return JSON.parse(saved);
+      }
+    } catch (error) {
+      console.error(`❌ Failed to load ${key}:`, error);
+    }
+    return defaultValue;
+  };
+
+  useEffect(() => {
+    setProblems(loadFromStorage('potd-problems', []));
+    setStats(loadFromStorage('potd-stats', {
+      currentStreak: 0,
+      longestStreak: 0,
+      totalCompleted: 0
+    }));
+    setDarkMode(loadFromStorage('potd-darkmode', false));
+  }, []);
+
+  useEffect(() => {
+    if (problems.length > 0) {
+      saveToStorage('potd-problems', problems);
+    }
+  }, [problems]);
+
+  useEffect(() => {
+    saveToStorage('potd-stats', stats);
+  }, [stats]);
+
+  useEffect(() => {
+    saveToStorage('potd-darkmode', darkMode);
+  }, [darkMode]);
+
+
+  // --- Core Logic ---
+  const getTodaysProblem = (): Problem | null => {
+    return problems.find(p => !p.completed) || null;
+  };
+
+  const markComplete = (problemId: string) => {
+    const today = new Date().toDateString();
+    const updatedProblems = problems.map(p =>
+      p.id === problemId
+        ? { ...p, completed: true, completedDate: today }
+        : p
+    );
+    setProblems(updatedProblems);
+
+    // Update stats
+    const newTotalCompleted = stats.totalCompleted + 1;
+    let newCurrentStreak = stats.currentStreak;
+    
+    if (stats.lastCompletedDate) {
+      const lastDate = new Date(stats.lastCompletedDate);
+      const yesterday = new Date();
+      yesterday.setDate(yesterday.getDate() - 1);
+      
+      if (lastDate.toDateString() === yesterday.toDateString()) {
+        newCurrentStreak += 1; // Consecutive day
+      } else if (lastDate.toDateString() !== today) {
+        newCurrentStreak = 1; // Streak broken
+      }
+      // If it's the same day, streak doesn't change
+    } else {
+      newCurrentStreak = 1; // First completion
+    }
+    
+    setStats({
+      totalCompleted: newTotalCompleted,
+      currentStreak: newCurrentStreak,
+      longestStreak: Math.max(stats.longestStreak, newCurrentStreak),
+      lastCompletedDate: today
+    });
+
+    // --- Celebration Animation ---
+    confetti({
+      particleCount: 150,
+      spread: 80,
+      origin: { y: 0.6 },
+      zIndex: 9999
+    });
+  };
+
+
+  // --- Problem & Data Handling ---
+  const parseProblems = (input: string): Problem[] => {
+    const lines = input.trim().split('\n').filter(line => line.trim());
+    return lines.map((line, index) => {
+      const urlMatch = line.match(/https?:\/\/[^\s]+/);
+      const url = urlMatch ? urlMatch[0] : '';
+      
+      let platform = 'Unknown';
+      let title = line.replace(url, '').trim() || `Problem ${index + 1}`;
+      
+      if (url.includes('leetcode')) platform = 'LeetCode';
+      else if (url.includes('codeforces')) platform = 'Codeforces';
+      else if (url.includes('codechef')) platform = 'CodeChef';
+      else if (url.includes('hackerrank')) platform = 'HackerRank';
+
+      return {
+        id: `problem-${Date.now()}-${index}`,
+        title,
+        url,
+        platform,
+        completed: false
+      };
+    });
+  };
+
+  const handleUploadProblems = () => {
+    if (!problemInput.trim()) return;
+    const newProblems = parseProblems(problemInput);
+    setProblems(prev => [...prev, ...newProblems]);
+    setProblemInput('');
+    setShowUpload(false);
+  };
+
+  const exportData = () => {
+    const exportContent = { problems, stats, darkMode };
+    const dataStr = JSON.stringify(exportContent, null, 2);
+    const dataBlob = new Blob([dataStr], { type: 'application/json' });
+    const url = URL.createObjectURL(dataBlob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `potd-backup-${new Date().toISOString().split('T')[0]}.json`;
+    link.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const importData = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const importedData = JSON.parse(e.target?.result as string);
+        if (importedData.problems) setProblems(importedData.problems);
+        if (importedData.stats) setStats(importedData.stats);
+        if (typeof importedData.darkMode === 'boolean') setDarkMode(importedData.darkMode);
+        alert('✅ Data imported successfully!');
+      } catch (error) {
+        alert('❌ Error importing data. Please check the file format.');
+      }
+    };
+    reader.readAsText(file);
+    event.target.value = ''; // Reset file input
+  };
+
+  const clearAllData = () => {
+    if (window.confirm('⚠️ Are you sure you want to clear all data? This cannot be undone!')) {
+      localStorage.removeItem('potd-problems');
+      localStorage.removeItem('potd-stats');
+      localStorage.removeItem('potd-darkmode');
+      setProblems([]);
+      setStats({ currentStreak: 0, longestStreak: 0, totalCompleted: 0 });
+      setDarkMode(false);
+      alert('🗑️ All data cleared!');
+    }
+  };
+
+  // --- Derived State for Rendering ---
+  const todaysProblem = getTodaysProblem();
+  const completedProblems = problems.filter(p => p.completed);
+  const progressPercentage = problems.length > 0 ? (completedProblems.length / problems.length) * 100 : 0;
+
+
+  // --- Render Method ---
   return (
-    <div className="font-sans grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20">
-      <main className="flex flex-col gap-[32px] row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="font-mono list-inside list-decimal text-sm/6 text-center sm:text-left">
-          <li className="mb-2 tracking-[-.01em]">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] font-mono font-semibold px-1 py-0.5 rounded">
-              src/app/page.tsx
-            </code>
-            .
-          </li>
-          <li className="tracking-[-.01em]">
-            Save and see your changes instantly.
-          </li>
-        </ol>
-
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:w-auto"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 w-full sm:w-auto md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
+    <div className={`min-h-screen transition-colors duration-300 ${
+      darkMode ? 'bg-gray-900 text-white' : 'bg-gradient-to-br from-blue-50 to-purple-50 text-gray-800'
+    }`}>
+      <div className="container mx-auto px-4 py-8 max-w-6xl">
+        {/* Header */}
+        <div className="flex justify-between items-center mb-8">
+          <div>
+            <h1 className="text-4xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+              POTD Tracker
+            </h1>
+            <p className={`text-lg ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>
+              Your daily coding challenge companion
+            </p>
+          </div>
+          
+          <div className="flex gap-2">
+            <button
+              onClick={() => setDarkMode(!darkMode)}
+              className={`p-3 rounded-full transition-all ${
+                darkMode ? 'bg-gray-800 hover:bg-gray-700' : 'bg-white hover:bg-gray-50'
+              } shadow-lg`}
+            >
+              {darkMode ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
+            </button>
+            
+            <div className="relative">
+              <input
+                type="file"
+                accept=".json"
+                onChange={importData}
+                className="hidden"
+                id="import-data"
+              />
+              <label
+                htmlFor="import-data"
+                className={`p-3 rounded-full transition-all cursor-pointer inline-block ${
+                  darkMode ? 'bg-gray-800 hover:bg-gray-700' : 'bg-white hover:bg-gray-50'
+                } shadow-lg`}
+                title="Import Data"
+              >
+                📥
+              </label>
+            </div>
+            
+            <button
+              onClick={exportData}
+              className={`p-3 rounded-full transition-all ${
+                darkMode ? 'bg-gray-800 hover:bg-gray-700' : 'bg-white hover:bg-gray-50'
+              } shadow-lg`}
+              title="Export Data"
+            >
+              📤
+            </button>
+            
+            <button
+              onClick={clearAllData}
+              className={`p-3 rounded-full transition-all ${
+                darkMode ? 'bg-red-900 hover:bg-red-800' : 'bg-red-50 hover:bg-red-100'
+              } shadow-lg text-red-600`}
+              title="Clear All Data"
+            >
+              🗑️
+            </button>
+            
+            <button
+              onClick={() => setShowUpload(!showUpload)}
+              className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-full font-medium shadow-lg hover:shadow-xl transform hover:scale-105 transition-all"
+            >
+              <Upload className="w-4 h-4" />
+              Add Problems
+            </button>
+          </div>
         </div>
-      </main>
-      <footer className="row-start-3 flex gap-[24px] flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
+
+        {/* Upload Modal */}
+        {showUpload && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-40 p-4">
+            <div className={`${
+              darkMode ? 'bg-gray-800' : 'bg-white'
+            } rounded-2xl p-6 max-w-2xl w-full`}>
+              <h3 className="text-2xl font-bold mb-4">Upload Problem Links</h3>
+              <p className={`${darkMode ? 'text-gray-300' : 'text-gray-600'} mb-4`}>
+                Paste your problem links (one per line). Include titles if you want:
+              </p>
+              <textarea
+                value={problemInput}
+                onChange={(e) => setProblemInput(e.target.value)}
+                placeholder="Example:&#10;Two Sum https://leetcode.com/problems/two-sum/&#10;https://codeforces.com/problem/1/A"
+                className={`w-full h-32 p-4 rounded-lg border-2 ${
+                  darkMode ? 'bg-gray-700 border-gray-600' : 'bg-gray-50 border-gray-200'
+                } focus:border-blue-500 outline-none resize-none`}
+              />
+              <div className="flex justify-end gap-3 mt-4">
+                <button
+                  onClick={() => setShowUpload(false)}
+                  className={`px-4 py-2 rounded-lg ${
+                    darkMode ? 'bg-gray-700 hover:bg-gray-600' : 'bg-gray-200 hover:bg-gray-300'
+                  } transition-colors`}
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleUploadProblems}
+                  className="px-6 py-2 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg hover:shadow-lg transition-all"
+                >
+                  Upload Problems
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Stats Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+            <StatCard title="Current Streak" value={stats.currentStreak} icon={Flame} color="orange" darkMode={darkMode} />
+            <StatCard title="Longest Streak" value={stats.longestStreak} icon={Trophy} color="yellow" darkMode={darkMode} />
+            <StatCard title="Total Completed" value={stats.totalCompleted} icon={Target} color="green" darkMode={darkMode} />
+            <StatCard title="Progress" value={`${Math.round(progressPercentage)}%`} icon={TrendingUp} color="purple" darkMode={darkMode} />
+        </div>
+
+        {/* Progress Bar */}
+        {problems.length > 0 && (
+          <div className={`${darkMode ? 'bg-gray-800' : 'bg-white'} p-6 rounded-2xl border ${darkMode ? 'border-gray-700' : 'border-gray-100'} shadow-lg mb-8`}>
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-lg font-semibold">Overall Progress</h3>
+              <span className={`text-sm ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>
+                {completedProblems.length} / {problems.length} problems
+              </span>
+            </div>
+            <div className={`w-full h-4 ${darkMode ? 'bg-gray-700' : 'bg-gray-200'} rounded-full overflow-hidden`}>
+              <div
+                className="h-full bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500 transition-all duration-1000 ease-out"
+                style={{ width: `${progressPercentage}%` }}
+              />
+            </div>
+          </div>
+        )}
+
+        {/* Today's Problem or Placeholders */}
+        {todaysProblem ? (
+          <TodayProblemCard problem={todaysProblem} onComplete={markComplete} darkMode={darkMode} />
+        ) : problems.length > 0 ? (
+          <AllProblemsDoneCard darkMode={darkMode}/>
+        ) : (
+          <GetStartedCard onAddProblems={() => setShowUpload(true)} darkMode={darkMode} />
+        )}
+
+        {/* Problem History */}
+        {problems.length > 0 && (
+          <ProblemHistory problems={problems} onComplete={markComplete} darkMode={darkMode} />
+        )}
+      </div>
     </div>
   );
-}
+};
+
+
+// --- Sub-Components ---
+const StatCard = ({ title, value, icon: Icon, color, darkMode }: any) => {
+    return (
+        <div className={`group ${darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-100'} p-6 rounded-2xl border shadow-lg hover:shadow-2xl hover:shadow-${color}-500/20 transition-all duration-300 transform hover:scale-105 hover:-translate-y-2`}>
+            <div className="flex items-center justify-between">
+                <div>
+                    <p className={`${darkMode ? 'text-gray-300' : 'text-gray-600'} text-sm font-medium`}>{title}</p>
+                    <p className={`text-3xl font-bold text-${color}-500 group-hover:scale-110 transition-transform duration-300`}>{value}</p>
+                </div>
+                <Icon className={`w-8 h-8 text-${color}-500 group-hover:animate-bounce`} />
+            </div>
+        </div>
+    );
+};
+
+const TodayProblemCard = ({ problem, onComplete, darkMode }: { problem: Problem, onComplete: (id: string) => void, darkMode: boolean }) => (
+    <div className={`${darkMode ? 'bg-gray-800' : 'bg-white'} p-8 rounded-2xl border ${darkMode ? 'border-gray-700' : 'border-gray-100'} shadow-lg mb-8`}>
+        <div className="flex items-center gap-3 mb-4">
+            <Calendar className="w-6 h-6 text-blue-500" />
+            <h2 className="text-2xl font-bold">Today's Problem</h2>
+        </div>
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div className="flex-1">
+                <h3 className="text-xl font-semibold mb-2">{problem.title}</h3>
+                <div className="flex items-center gap-3 mb-4">
+                    <PlatformTag platform={problem.platform} darkMode={darkMode} />
+                    <a href={problem.url} target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:text-blue-600 text-sm underline">
+                        View Problem →
+                    </a>
+                </div>
+            </div>
+            <button
+                onClick={() => onComplete(problem.id)}
+                className="group flex items-center gap-2 px-8 py-4 bg-gradient-to-r from-green-500 to-green-600 text-white rounded-full font-medium shadow-lg hover:shadow-2xl hover:shadow-green-500/30 transform hover:scale-105 transition-all duration-300 relative overflow-hidden"
+            >
+                <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -skew-x-12 -translate-x-full group-hover:translate-x-full transition-transform duration-1000" />
+                <CheckCircle2 className="w-5 h-5 group-hover:rotate-[360deg] transition-transform duration-500" />
+                <span className="relative z-10">Mark as Complete</span>
+            </button>
+        </div>
+    </div>
+);
+
+const GetStartedCard = ({ onAddProblems, darkMode }: any) => (
+    <div className={`${darkMode ? 'bg-gray-800' : 'bg-white'} p-8 rounded-2xl border ${darkMode ? 'border-gray-700' : 'border-gray-100'} shadow-lg mb-8 text-center`}>
+        <Upload className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+        <h2 className="text-2xl font-bold mb-2">Get Started</h2>
+        <p className={`${darkMode ? 'text-gray-300' : 'text-gray-600'} mb-4`}>
+            Upload your first set of problems to begin your coding journey!
+        </p>
+        <button onClick={onAddProblems} className="px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-full font-medium shadow-lg hover:shadow-xl transform hover:scale-105 transition-all">
+            Add Problems
+        </button>
+    </div>
+);
+
+const AllProblemsDoneCard = ({ darkMode }: any) => (
+    <div className={`${darkMode ? 'bg-gray-800' : 'bg-white'} p-8 rounded-2xl border ${darkMode ? 'border-gray-700' : 'border-gray-100'} shadow-lg mb-8 text-center`}>
+        <Star className="w-16 h-16 text-yellow-500 mx-auto mb-4" />
+        <h2 className="text-2xl font-bold mb-2">Congratulations!</h2>
+        <p className={`${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>
+            You've completed all problems! Time to add more challenges.
+        </p>
+    </div>
+);
+
+const ProblemHistory = ({ problems, onComplete, darkMode }: { problems: Problem[], onComplete: (id: string) => void, darkMode: boolean }) => (
+    <div className={`${darkMode ? 'bg-gray-800' : 'bg-white'} p-6 rounded-2xl border ${darkMode ? 'border-gray-700' : 'border-gray-100'} shadow-lg`}>
+        <h3 className="text-xl font-bold mb-6">Problem History</h3>
+        <div className="space-y-3 max-h-96 overflow-y-auto">
+            {problems.map((problem, index) => (
+                <ProblemHistoryItem key={problem.id} problem={problem} index={index} onComplete={onComplete} darkMode={darkMode} />
+            ))}
+        </div>
+    </div>
+);
+
+const ProblemHistoryItem = ({ problem, index, onComplete, darkMode }: any) => (
+    <div className={`flex items-center justify-between p-4 rounded-lg transition-all ${problem.completed ? (darkMode ? 'bg-green-900/20' : 'bg-green-50') : (darkMode ? 'bg-gray-700' : 'bg-gray-50')}`}>
+        <div className="flex items-center gap-4">
+            <span className={`text-sm font-medium px-2 py-1 rounded ${darkMode ? 'bg-gray-600' : 'bg-gray-200'}`}>
+                #{index + 1}
+            </span>
+            <div>
+                <h4 className={`font-medium ${problem.completed ? 'line-through opacity-75' : ''}`}>{problem.title}</h4>
+                <div className="flex items-center gap-3">
+                    <PlatformTag platform={problem.platform} darkMode={darkMode} />
+                    <a href={problem.url} target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:text-blue-600 text-xs underline">
+                        View Problem
+                    </a>
+                </div>
+            </div>
+        </div>
+        <div>
+            {problem.completed ? (
+                <div className="flex items-center gap-2 text-green-500">
+                    <CheckCircle2 className="w-5 h-5" />
+                    <span className="text-sm font-medium">Completed</span>
+                </div>
+            ) : (
+                <button onClick={() => onComplete(problem.id)} className="group px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white text-sm rounded-lg transition-all transform hover:scale-105">
+                    Mark Done
+                </button>
+            )}
+        </div>
+    </div>
+);
+
+const PlatformTag = ({ platform, darkMode }: { platform: string, darkMode: boolean }) => {
+    const baseStyle = "text-xs px-2 py-1 rounded-full ";
+    const lightModeColors: { [key: string]: string } = {
+        'LeetCode': 'bg-yellow-100 text-yellow-800',
+        'Codeforces': 'bg-red-100 text-red-800',
+        'CodeChef': 'bg-orange-100 text-orange-800',
+        'HackerRank': 'bg-green-100 text-green-800',
+        'Unknown': 'bg-gray-100 text-gray-800'
+    };
+    const darkModeColors: { [key: string]: string } = {
+        'LeetCode': 'bg-yellow-900/50 text-yellow-300',
+        'Codeforces': 'bg-red-900/50 text-red-300',
+        'CodeChef': 'bg-orange-900/50 text-orange-300',
+        'HackerRank': 'bg-green-900/50 text-green-300',
+        'Unknown': 'bg-gray-700 text-gray-300'
+    };
+    return (
+        <span className={baseStyle + (darkMode ? darkModeColors[platform] : lightModeColors[platform])}>
+            {platform}
+        </span>
+    );
+};
+
+export default PotdTracker;
+
