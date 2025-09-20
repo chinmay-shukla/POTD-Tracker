@@ -1,4 +1,3 @@
-'use client'
 import React, { useState, useEffect } from 'react';
 import { CheckCircle2, Trophy, Target, Calendar, Upload, Star, Flame, TrendingUp, Moon, Sun, LucideProps, RotateCcw } from 'lucide-react';
 import confetti from 'canvas-confetti';
@@ -26,25 +25,6 @@ interface StatCardProps {
   value: string | number;
   icon: React.ComponentType<LucideProps>;
   color: string;
-  darkMode: boolean;
-}
-
-interface TodayProblemCardProps {
-  problem: Problem;
-  onComplete: (id: string) => void;
-  darkMode: boolean;
-}
-
-interface GetStartedCardProps {
-  onAddProblems: () => void;
-  darkMode: boolean;
-}
-
-interface PotdDoneForTodayCardProps {
-    darkMode: boolean;
-}
-
-interface AllProblemsDoneCardProps {
   darkMode: boolean;
 }
 
@@ -321,12 +301,9 @@ const PotdTracker = () => {
   };
 
   // --- Derived State for Rendering ---
-  const today = new Date().toDateString();
-  const isPotdDoneForToday = stats.lastCompletedDate === today;
-  const nextIncompleteProblem = problems.find(p => !p.completed) || null;
-  const allProblemsCompleted = problems.length > 0 && !nextIncompleteProblem;
   const completedProblems = problems.filter(p => p.completed);
   const progressPercentage = problems.length > 0 ? (completedProblems.length / problems.length) * 100 : 0;
+  const allProblemsCompleted = problems.length > 0 && completedProblems.length === problems.length;
 
 
   // --- Render Method ---
@@ -469,23 +446,30 @@ const PotdTracker = () => {
           </div>
         )}
 
-        {/* Main Content Area: Today's Problem or Placeholders */}
-        <div className="main-content-area">
-            {problems.length === 0 ? (
-                <GetStartedCard onAddProblems={() => setShowUpload(true)} darkMode={darkMode} />
-            ) : isPotdDoneForToday ? (
-                <PotdDoneForTodayCard darkMode={darkMode} />
-            ) : nextIncompleteProblem ? (
-                <TodayProblemCard problem={nextIncompleteProblem} onComplete={markComplete} darkMode={darkMode} />
-            ) : allProblemsCompleted ? (
-                <AllProblemsDoneCard darkMode={darkMode}/>
-            ) : null}
-        </div>
+        {/* Main Content Area: DSA Sheet */}
+        {problems.length > 0 ? (
+            <ProblemHistory problems={problems} onComplete={markComplete} onIncomplete={markIncomplete} darkMode={darkMode} />
+        ) : (
+            <div className={`${darkMode ? 'bg-gray-800' : 'bg-white'} p-8 rounded-2xl border ${darkMode ? 'border-gray-700' : 'border-gray-100'} shadow-lg mb-8 text-center`}>
+                <Upload className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+                <h2 className="text-2xl font-bold mb-2">Get Started</h2>
+                <p className={`${darkMode ? 'text-gray-300' : 'text-gray-600'} mb-4`}>
+                    Upload your first set of problems to begin your coding journey!
+                </p>
+                <button onClick={() => setShowUpload(true)} className="px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-full font-medium shadow-lg hover:shadow-xl transform hover:scale-105 transition-all">
+                    Add Problems
+                </button>
+            </div>
+        )}
 
-
-        {/* Problem History */}
-        {problems.length > 0 && (
-          <ProblemHistory problems={problems} onComplete={markComplete} onIncomplete={markIncomplete} darkMode={darkMode} />
+        {allProblemsCompleted && (
+             <div className={`${darkMode ? 'bg-gray-800' : 'bg-white'} p-8 rounded-2xl border ${darkMode ? 'border-gray-700' : 'border-gray-100'} shadow-lg my-8 text-center`}>
+                <Star className="w-16 h-16 text-yellow-500 mx-auto mb-4" />
+                <h2 className="text-2xl font-bold mb-2">Congratulations!</h2>
+                <p className={`${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>
+                    You&apos;ve completed all problems! Time to add more challenges.
+                </p>
+            </div>
         )}
       </div>
     </div>
@@ -508,72 +492,10 @@ const StatCard: React.FC<StatCardProps> = ({ title, value, icon: Icon, color, da
     );
 };
 
-const TodayProblemCard: React.FC<TodayProblemCardProps> = ({ problem, onComplete, darkMode }) => (
-    <div className={`${darkMode ? 'bg-gray-800' : 'bg-white'} p-8 rounded-2xl border ${darkMode ? 'border-gray-700' : 'border-gray-100'} shadow-lg mb-8`}>
-        <div className="flex items-center gap-3 mb-4">
-            <Calendar className="w-6 h-6 text-blue-500" />
-            <h2 className="text-2xl font-bold">Today&apos;s Problem</h2>
-        </div>
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-            <div className="flex-1">
-                <h3 className="text-xl font-semibold mb-2">{problem.title}</h3>
-                <div className="flex items-center gap-3 mb-4">
-                    <PlatformTag platform={problem.platform} darkMode={darkMode} />
-                    <a href={problem.url} target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:text-blue-600 text-sm underline">
-                        View Problem →
-                    </a>
-                </div>
-            </div>
-            <button
-                onClick={() => onComplete(problem.id)}
-                className="group flex items-center gap-2 px-8 py-4 bg-gradient-to-r from-green-500 to-green-600 text-white rounded-full font-medium shadow-lg hover:shadow-2xl hover:shadow-green-500/30 transform hover:scale-105 transition-all duration-300 relative overflow-hidden"
-            >
-                <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -skew-x-12 -translate-x-full group-hover:translate-x-full transition-transform duration-1000" />
-                <CheckCircle2 className="w-5 h-5 group-hover:rotate-[360deg] transition-transform duration-500" />
-                <span className="relative z-10">Mark as Complete</span>
-            </button>
-        </div>
-    </div>
-);
-
-const GetStartedCard: React.FC<GetStartedCardProps> = ({ onAddProblems, darkMode }) => (
-    <div className={`${darkMode ? 'bg-gray-800' : 'bg-white'} p-8 rounded-2xl border ${darkMode ? 'border-gray-700' : 'border-gray-100'} shadow-lg mb-8 text-center`}>
-        <Upload className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-        <h2 className="text-2xl font-bold mb-2">Get Started</h2>
-        <p className={`${darkMode ? 'text-gray-300' : 'text-gray-600'} mb-4`}>
-            Upload your first set of problems to begin your coding journey!
-        </p>
-        <button onClick={onAddProblems} className="px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-full font-medium shadow-lg hover:shadow-xl transform hover:scale-105 transition-all">
-            Add Problems
-        </button>
-    </div>
-);
-
-const PotdDoneForTodayCard: React.FC<PotdDoneForTodayCardProps> = ({ darkMode }) => (
-    <div className={`${darkMode ? 'bg-gray-800' : 'bg-white'} p-8 rounded-2xl border ${darkMode ? 'border-gray-700' : 'border-gray-100'} shadow-lg mb-8 text-center`}>
-        <CheckCircle2 className="w-16 h-16 text-green-500 mx-auto mb-4" />
-        <h2 className="text-2xl font-bold mb-2">Great Job!</h2>
-        <p className={`${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>
-            You&apos;ve finished your problem for today. Come back tomorrow for the next one!
-        </p>
-    </div>
-);
-
-
-const AllProblemsDoneCard: React.FC<AllProblemsDoneCardProps> = ({ darkMode }) => (
-    <div className={`${darkMode ? 'bg-gray-800' : 'bg-white'} p-8 rounded-2xl border ${darkMode ? 'border-gray-700' : 'border-gray-100'} shadow-lg mb-8 text-center`}>
-        <Star className="w-16 h-16 text-yellow-500 mx-auto mb-4" />
-        <h2 className="text-2xl font-bold mb-2">Congratulations!</h2>
-        <p className={`${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>
-            You&apos;ve completed all problems! Time to add more challenges.
-        </p>
-    </div>
-);
-
 const ProblemHistory: React.FC<ProblemHistoryProps> = ({ problems, onComplete, onIncomplete, darkMode }) => (
     <div className={`${darkMode ? 'bg-gray-800' : 'bg-white'} p-6 rounded-2xl border ${darkMode ? 'border-gray-700' : 'border-gray-100'} shadow-lg`}>
         <h3 className="text-xl font-bold mb-6">Problem History</h3>
-        <div className="space-y-3 max-h-96 overflow-y-auto">
+        <div className="space-y-3">
             {problems.map((problem, index) => (
                 <ProblemHistoryItem key={problem.id} problem={problem} index={index} onComplete={onComplete} onIncomplete={onIncomplete} darkMode={darkMode} />
             ))}
