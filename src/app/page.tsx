@@ -1,7 +1,5 @@
-'use client' 
-
 import React, { useState, useEffect } from 'react';
-import { CheckCircle2, Trophy, Target, Calendar, Upload, Star, Flame, TrendingUp, Moon, Sun, LucideProps } from 'lucide-react';
+import { CheckCircle2, Trophy, Target, Calendar, Upload, Star, Flame, TrendingUp, Moon, Sun, LucideProps, RotateCcw } from 'lucide-react';
 import confetti from 'canvas-confetti';
 
 // --- Interfaces ---
@@ -41,6 +39,10 @@ interface GetStartedCardProps {
   darkMode: boolean;
 }
 
+interface PotdDoneForTodayCardProps {
+    darkMode: boolean;
+}
+
 interface AllProblemsDoneCardProps {
   darkMode: boolean;
 }
@@ -48,6 +50,7 @@ interface AllProblemsDoneCardProps {
 interface ProblemHistoryProps {
   problems: Problem[];
   onComplete: (id: string) => void;
+  onIncomplete: (id: string) => void;
   darkMode: boolean;
 }
 
@@ -55,6 +58,7 @@ interface ProblemHistoryItemProps {
   problem: Problem;
   index: number;
   onComplete: (id: string) => void;
+  onIncomplete: (id: string) => void;
   darkMode: boolean;
 }
 
@@ -110,7 +114,8 @@ const PotdTracker = () => {
   }, []);
 
   useEffect(() => {
-    if (problems.length > 0) {
+    // Avoid saving empty problems array on initial load if it exists in storage
+    if (problems && problems.length > 0) {
       saveToStorage('potd-problems', problems);
     }
   }, [problems]);
@@ -125,8 +130,63 @@ const PotdTracker = () => {
 
 
   // --- Core Logic ---
-  const getTodaysProblem = (): Problem | null => {
-    return problems.find(p => !p.completed) || null;
+  const recalculateStatsFromHistory = (problemList: Problem[]) => {
+    const completed = problemList
+        .filter(p => p.completed && p.completedDate)
+        .sort((a, b) => new Date(a.completedDate!).getTime() - new Date(b.completedDate!).getTime());
+
+    if (completed.length === 0) {
+        setStats({
+            currentStreak: 0,
+            longestStreak: stats.longestStreak, // Keep longest streak unless it needs recalculating too
+            totalCompleted: 0,
+            lastCompletedDate: undefined
+        });
+        return;
+    }
+
+    let currentStreak = 0;
+    let longestStreak = 0;
+    
+    if(completed.length > 0){
+        currentStreak = 1;
+        longestStreak = 1;
+    }
+
+    for (let i = 1; i < completed.length; i++) {
+        const currentDate = new Date(completed[i].completedDate!);
+        const prevDate = new Date(completed[i - 1].completedDate!);
+        
+        const diffTime = currentDate.getTime() - prevDate.getTime();
+        const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
+
+        if (diffDays === 1) {
+            currentStreak++;
+        } else if (diffDays > 1) {
+            currentStreak = 1;
+        }
+        
+        if (currentStreak > longestStreak) {
+            longestStreak = currentStreak;
+        }
+    }
+    
+    const lastCompleted = completed[completed.length - 1];
+    const today = new Date();
+    const lastDate = new Date(lastCompleted.completedDate!);
+    const diffTimeFromToday = today.getTime() - lastDate.getTime();
+    const diffDaysFromToday = Math.floor(diffTimeFromToday / (1000 * 60 * 60 * 24));
+
+    if (diffDaysFromToday > 1) {
+        currentStreak = 0;
+    }
+
+    setStats({
+        totalCompleted: completed.length,
+        currentStreak,
+        longestStreak: Math.max(stats.longestStreak, longestStreak), // Ensure longest streak is never less than before
+        lastCompletedDate: lastCompleted.completedDate
+    });
   };
 
   const markComplete = (problemId: string) => {
@@ -152,7 +212,6 @@ const PotdTracker = () => {
       } else if (lastDate.toDateString() !== today) {
         newCurrentStreak = 1; // Streak broken
       }
-      // If it's the same day, streak doesn't change
     } else {
       newCurrentStreak = 1; // First completion
     }
@@ -164,13 +223,22 @@ const PotdTracker = () => {
       lastCompletedDate: today
     });
 
-    // --- Celebration Animation ---
     confetti({
       particleCount: 150,
       spread: 80,
       origin: { y: 0.6 },
       zIndex: 9999
     });
+  };
+
+  const markIncomplete = (problemId: string) => {
+    const updatedProblems = problems.map(p =>
+      p.id === problemId
+        ? { ...p, completed: false, completedDate: undefined }
+        : p
+    );
+    setProblems(updatedProblems);
+    recalculateStatsFromHistory(updatedProblems);
   };
 
 
@@ -252,7 +320,10 @@ const PotdTracker = () => {
   };
 
   // --- Derived State for Rendering ---
-  const todaysProblem = getTodaysProblem();
+  const today = new Date().toDateString();
+  const isPotdDoneForToday = stats.lastCompletedDate === today;
+  const nextIncompleteProblem = problems.find(p => !p.completed) || null;
+  const allProblemsCompleted = problems.length > 0 && !nextIncompleteProblem;
   const completedProblems = problems.filter(p => p.completed);
   const progressPercentage = problems.length > 0 ? (completedProblems.length / problems.length) * 100 : 0;
 
@@ -277,7 +348,7 @@ const PotdTracker = () => {
           <div className="flex gap-2">
             <button
               onClick={() => setDarkMode(!darkMode)}
-              className={`p-3 rounded-full transition-all cursor-pointer ${
+              className={`p-3 rounded-full transition-all ${
                 darkMode ? 'bg-gray-800 hover:bg-gray-700' : 'bg-white hover:bg-gray-50'
               } shadow-lg`}
             >
@@ -305,7 +376,7 @@ const PotdTracker = () => {
             
             <button
               onClick={exportData}
-              className={`p-3 rounded-full transition-all cursor-pointer ${
+              className={`p-3 rounded-full transition-all ${
                 darkMode ? 'bg-gray-800 hover:bg-gray-700' : 'bg-white hover:bg-gray-50'
               } shadow-lg`}
               title="Export Data"
@@ -315,7 +386,7 @@ const PotdTracker = () => {
             
             <button
               onClick={clearAllData}
-              className={`p-3 rounded-full transition-all cursor-pointer  ${
+              className={`p-3 rounded-full transition-all ${
                 darkMode ? 'bg-red-900 hover:bg-red-800' : 'bg-red-50 hover:bg-red-100'
               } shadow-lg text-red-600`}
               title="Clear All Data"
@@ -325,7 +396,7 @@ const PotdTracker = () => {
             
             <button
               onClick={() => setShowUpload(!showUpload)}
-              className="cursor-pointer flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-full font-medium shadow-lg hover:shadow-xl transform hover:scale-105 transition-all"
+              className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-full font-medium shadow-lg hover:shadow-xl transform hover:scale-105 transition-all"
             >
               <Upload className="w-4 h-4" />
               Add Problems
@@ -397,18 +468,23 @@ const PotdTracker = () => {
           </div>
         )}
 
-        {/* Today's Problem or Placeholders */}
-        {todaysProblem ? (
-          <TodayProblemCard problem={todaysProblem} onComplete={markComplete} darkMode={darkMode} />
-        ) : problems.length > 0 ? (
-          <AllProblemsDoneCard darkMode={darkMode}/>
-        ) : (
-          <GetStartedCard onAddProblems={() => setShowUpload(true)} darkMode={darkMode} />
-        )}
+        {/* Main Content Area: Today's Problem or Placeholders */}
+        <div className="main-content-area">
+            {problems.length === 0 ? (
+                <GetStartedCard onAddProblems={() => setShowUpload(true)} darkMode={darkMode} />
+            ) : isPotdDoneForToday ? (
+                <PotdDoneForTodayCard darkMode={darkMode} />
+            ) : nextIncompleteProblem ? (
+                <TodayProblemCard problem={nextIncompleteProblem} onComplete={markComplete} darkMode={darkMode} />
+            ) : allProblemsCompleted ? (
+                <AllProblemsDoneCard darkMode={darkMode}/>
+            ) : null}
+        </div>
+
 
         {/* Problem History */}
         {problems.length > 0 && (
-          <ProblemHistory problems={problems} onComplete={markComplete} darkMode={darkMode} />
+          <ProblemHistory problems={problems} onComplete={markComplete} onIncomplete={markIncomplete} darkMode={darkMode} />
         )}
       </div>
     </div>
@@ -449,11 +525,11 @@ const TodayProblemCard: React.FC<TodayProblemCardProps> = ({ problem, onComplete
             </div>
             <button
                 onClick={() => onComplete(problem.id)}
-                className="cursor-pointer group flex items-center gap-2 px-8 py-4 bg-gradient-to-r from-green-500 to-green-600 text-white rounded-full font-medium shadow-lg hover:shadow-2xl hover:shadow-green-500/30 transform hover:scale-105 transition-all duration-300 relative overflow-hidden"
+                className="group flex items-center gap-2 px-8 py-4 bg-gradient-to-r from-green-500 to-green-600 text-white rounded-full font-medium shadow-lg hover:shadow-2xl hover:shadow-green-500/30 transform hover:scale-105 transition-all duration-300 relative overflow-hidden"
             >
                 <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -skew-x-12 -translate-x-full group-hover:translate-x-full transition-transform duration-1000" />
                 <CheckCircle2 className="w-5 h-5 group-hover:rotate-[360deg] transition-transform duration-500" />
-                <span className="relative z-10 ">Mark as Complete</span>
+                <span className="relative z-10">Mark as Complete</span>
             </button>
         </div>
     </div>
@@ -472,6 +548,17 @@ const GetStartedCard: React.FC<GetStartedCardProps> = ({ onAddProblems, darkMode
     </div>
 );
 
+const PotdDoneForTodayCard: React.FC<PotdDoneForTodayCardProps> = ({ darkMode }) => (
+    <div className={`${darkMode ? 'bg-gray-800' : 'bg-white'} p-8 rounded-2xl border ${darkMode ? 'border-gray-700' : 'border-gray-100'} shadow-lg mb-8 text-center`}>
+        <CheckCircle2 className="w-16 h-16 text-green-500 mx-auto mb-4" />
+        <h2 className="text-2xl font-bold mb-2">Great Job!</h2>
+        <p className={`${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>
+            You&apos;ve finished your problem for today. Come back tomorrow for the next one!
+        </p>
+    </div>
+);
+
+
 const AllProblemsDoneCard: React.FC<AllProblemsDoneCardProps> = ({ darkMode }) => (
     <div className={`${darkMode ? 'bg-gray-800' : 'bg-white'} p-8 rounded-2xl border ${darkMode ? 'border-gray-700' : 'border-gray-100'} shadow-lg mb-8 text-center`}>
         <Star className="w-16 h-16 text-yellow-500 mx-auto mb-4" />
@@ -482,25 +569,25 @@ const AllProblemsDoneCard: React.FC<AllProblemsDoneCardProps> = ({ darkMode }) =
     </div>
 );
 
-const ProblemHistory: React.FC<ProblemHistoryProps> = ({ problems, onComplete, darkMode }) => (
+const ProblemHistory: React.FC<ProblemHistoryProps> = ({ problems, onComplete, onIncomplete, darkMode }) => (
     <div className={`${darkMode ? 'bg-gray-800' : 'bg-white'} p-6 rounded-2xl border ${darkMode ? 'border-gray-700' : 'border-gray-100'} shadow-lg`}>
         <h3 className="text-xl font-bold mb-6">Problem History</h3>
         <div className="space-y-3 max-h-96 overflow-y-auto">
             {problems.map((problem, index) => (
-                <ProblemHistoryItem key={problem.id} problem={problem} index={index} onComplete={onComplete} darkMode={darkMode} />
+                <ProblemHistoryItem key={problem.id} problem={problem} index={index} onComplete={onComplete} onIncomplete={onIncomplete} darkMode={darkMode} />
             ))}
         </div>
     </div>
 );
 
-const ProblemHistoryItem: React.FC<ProblemHistoryItemProps> = ({ problem, index, onComplete, darkMode }) => (
+const ProblemHistoryItem: React.FC<ProblemHistoryItemProps> = ({ problem, index, onComplete, onIncomplete, darkMode }) => (
     <div className={`flex items-center justify-between p-4 rounded-lg transition-all ${problem.completed ? (darkMode ? 'bg-green-900/20' : 'bg-green-50') : (darkMode ? 'bg-gray-700' : 'bg-gray-50')}`}>
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-4 flex-1 min-w-0">
             <span className={`text-sm font-medium px-2 py-1 rounded ${darkMode ? 'bg-gray-600' : 'bg-gray-200'}`}>
                 #{index + 1}
             </span>
-            <div>
-                <h4 className={`font-medium ${problem.completed ? 'line-through opacity-75' : ''}`}>{problem.title}</h4>
+            <div className="truncate">
+                <h4 className={`font-medium truncate ${problem.completed ? 'line-through opacity-75' : ''}`}>{problem.title}</h4>
                 <div className="flex items-center gap-3">
                     <PlatformTag platform={problem.platform} darkMode={darkMode} />
                     <a href={problem.url} target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:text-blue-600 text-xs underline">
@@ -509,14 +596,19 @@ const ProblemHistoryItem: React.FC<ProblemHistoryItemProps> = ({ problem, index,
                 </div>
             </div>
         </div>
-        <div>
+        <div className="flex items-center gap-2">
             {problem.completed ? (
-                <div className="flex items-center gap-2 text-green-500">
-                    <CheckCircle2 className="w-5 h-5" />
-                    <span className="text-sm font-medium">Completed</span>
-                </div>
+                <>
+                    <div className="flex items-center gap-2 text-green-500">
+                        <CheckCircle2 className="w-5 h-5" />
+                        <span className="text-sm font-medium hidden sm:inline">Completed</span>
+                    </div>
+                     <button onClick={() => onIncomplete(problem.id)} className={`p-2 rounded-full transition-colors ${darkMode ? 'hover:bg-gray-600' : 'hover:bg-gray-200'}`} title="Mark as incomplete">
+                        <RotateCcw className="w-4 h-4 text-gray-500" />
+                    </button>
+                </>
             ) : (
-                <button onClick={() => onComplete(problem.id)} className="cursor-pointer group px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white text-sm rounded-lg transition-all transform hover:scale-105">
+                <button onClick={() => onComplete(problem.id)} className="group px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white text-sm rounded-lg transition-all transform hover:scale-105">
                     Mark Done
                 </button>
             )}
