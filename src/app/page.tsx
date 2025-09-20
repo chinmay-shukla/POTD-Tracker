@@ -1,5 +1,7 @@
+'use client' 
+
 import React, { useState, useEffect } from 'react';
-import { CheckCircle2, Trophy, Target, Calendar, Upload, Star, Flame, TrendingUp, Moon, Sun } from 'lucide-react';
+import { CheckCircle2, Trophy, Target, Calendar, Upload, Star, Flame, TrendingUp, Moon, Sun, LucideProps } from 'lucide-react';
 import confetti from 'canvas-confetti';
 
 // --- Interfaces ---
@@ -19,6 +21,48 @@ interface Stats {
   lastCompletedDate?: string;
 }
 
+// --- Prop Types for Sub-Components ---
+interface StatCardProps {
+  title: string;
+  value: string | number;
+  icon: React.ComponentType<LucideProps>;
+  color: string;
+  darkMode: boolean;
+}
+
+interface TodayProblemCardProps {
+  problem: Problem;
+  onComplete: (id: string) => void;
+  darkMode: boolean;
+}
+
+interface GetStartedCardProps {
+  onAddProblems: () => void;
+  darkMode: boolean;
+}
+
+interface AllProblemsDoneCardProps {
+  darkMode: boolean;
+}
+
+interface ProblemHistoryProps {
+  problems: Problem[];
+  onComplete: (id: string) => void;
+  darkMode: boolean;
+}
+
+interface ProblemHistoryItemProps {
+  problem: Problem;
+  index: number;
+  onComplete: (id: string) => void;
+  darkMode: boolean;
+}
+
+interface PlatformTagProps {
+    platform: string;
+    darkMode: boolean;
+}
+
 
 // --- Main Component ---
 const PotdTracker = () => {
@@ -34,7 +78,7 @@ const PotdTracker = () => {
   const [darkMode, setDarkMode] = useState(false);
 
   // --- Local Storage Hooks ---
-  const saveToStorage = (key: string, data: any) => {
+  const saveToStorage = (key: string, data: unknown) => {
     try {
       localStorage.setItem(key, JSON.stringify(data));
     } catch (error) {
@@ -43,11 +87,11 @@ const PotdTracker = () => {
     }
   };
 
-  const loadFromStorage = (key: string, defaultValue: any) => {
+  const loadFromStorage = <T,>(key: string, defaultValue: T): T => {
     try {
       const saved = localStorage.getItem(key);
       if (saved) {
-        return JSON.parse(saved);
+        return JSON.parse(saved) as T;
       }
     } catch (error) {
       console.error(`❌ Failed to load ${key}:`, error);
@@ -56,13 +100,13 @@ const PotdTracker = () => {
   };
 
   useEffect(() => {
-    setProblems(loadFromStorage('potd-problems', []));
-    setStats(loadFromStorage('potd-stats', {
+    setProblems(loadFromStorage<Problem[]>('potd-problems', []));
+    setStats(loadFromStorage<Stats>('potd-stats', {
       currentStreak: 0,
       longestStreak: 0,
       totalCompleted: 0
     }));
-    setDarkMode(loadFromStorage('potd-darkmode', false));
+    setDarkMode(loadFromStorage<boolean>('potd-darkmode', false));
   }, []);
 
   useEffect(() => {
@@ -138,7 +182,7 @@ const PotdTracker = () => {
       const url = urlMatch ? urlMatch[0] : '';
       
       let platform = 'Unknown';
-      let title = line.replace(url, '').trim() || `Problem ${index + 1}`;
+      const title = line.replace(url, '').trim() || `Problem ${index + 1}`;
       
       if (url.includes('leetcode')) platform = 'LeetCode';
       else if (url.includes('codeforces')) platform = 'Codeforces';
@@ -187,6 +231,7 @@ const PotdTracker = () => {
         if (typeof importedData.darkMode === 'boolean') setDarkMode(importedData.darkMode);
         alert('✅ Data imported successfully!');
       } catch (error) {
+        console.error("Failed to import data:", error);
         alert('❌ Error importing data. Please check the file format.');
       }
     };
@@ -372,7 +417,7 @@ const PotdTracker = () => {
 
 
 // --- Sub-Components ---
-const StatCard = ({ title, value, icon: Icon, color, darkMode }: any) => {
+const StatCard: React.FC<StatCardProps> = ({ title, value, icon: Icon, color, darkMode }) => {
     return (
         <div className={`group ${darkMode ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-100'} p-6 rounded-2xl border shadow-lg hover:shadow-2xl hover:shadow-${color}-500/20 transition-all duration-300 transform hover:scale-105 hover:-translate-y-2`}>
             <div className="flex items-center justify-between">
@@ -386,11 +431,11 @@ const StatCard = ({ title, value, icon: Icon, color, darkMode }: any) => {
     );
 };
 
-const TodayProblemCard = ({ problem, onComplete, darkMode }: { problem: Problem, onComplete: (id: string) => void, darkMode: boolean }) => (
+const TodayProblemCard: React.FC<TodayProblemCardProps> = ({ problem, onComplete, darkMode }) => (
     <div className={`${darkMode ? 'bg-gray-800' : 'bg-white'} p-8 rounded-2xl border ${darkMode ? 'border-gray-700' : 'border-gray-100'} shadow-lg mb-8`}>
         <div className="flex items-center gap-3 mb-4">
             <Calendar className="w-6 h-6 text-blue-500" />
-            <h2 className="text-2xl font-bold">Today's Problem</h2>
+            <h2 className="text-2xl font-bold">Today&apos;s Problem</h2>
         </div>
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div className="flex-1">
@@ -414,7 +459,7 @@ const TodayProblemCard = ({ problem, onComplete, darkMode }: { problem: Problem,
     </div>
 );
 
-const GetStartedCard = ({ onAddProblems, darkMode }: any) => (
+const GetStartedCard: React.FC<GetStartedCardProps> = ({ onAddProblems, darkMode }) => (
     <div className={`${darkMode ? 'bg-gray-800' : 'bg-white'} p-8 rounded-2xl border ${darkMode ? 'border-gray-700' : 'border-gray-100'} shadow-lg mb-8 text-center`}>
         <Upload className="w-16 h-16 text-gray-400 mx-auto mb-4" />
         <h2 className="text-2xl font-bold mb-2">Get Started</h2>
@@ -427,17 +472,17 @@ const GetStartedCard = ({ onAddProblems, darkMode }: any) => (
     </div>
 );
 
-const AllProblemsDoneCard = ({ darkMode }: any) => (
+const AllProblemsDoneCard: React.FC<AllProblemsDoneCardProps> = ({ darkMode }) => (
     <div className={`${darkMode ? 'bg-gray-800' : 'bg-white'} p-8 rounded-2xl border ${darkMode ? 'border-gray-700' : 'border-gray-100'} shadow-lg mb-8 text-center`}>
         <Star className="w-16 h-16 text-yellow-500 mx-auto mb-4" />
         <h2 className="text-2xl font-bold mb-2">Congratulations!</h2>
         <p className={`${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>
-            You've completed all problems! Time to add more challenges.
+            You&apos;ve completed all problems! Time to add more challenges.
         </p>
     </div>
 );
 
-const ProblemHistory = ({ problems, onComplete, darkMode }: { problems: Problem[], onComplete: (id: string) => void, darkMode: boolean }) => (
+const ProblemHistory: React.FC<ProblemHistoryProps> = ({ problems, onComplete, darkMode }) => (
     <div className={`${darkMode ? 'bg-gray-800' : 'bg-white'} p-6 rounded-2xl border ${darkMode ? 'border-gray-700' : 'border-gray-100'} shadow-lg`}>
         <h3 className="text-xl font-bold mb-6">Problem History</h3>
         <div className="space-y-3 max-h-96 overflow-y-auto">
@@ -448,7 +493,7 @@ const ProblemHistory = ({ problems, onComplete, darkMode }: { problems: Problem[
     </div>
 );
 
-const ProblemHistoryItem = ({ problem, index, onComplete, darkMode }: any) => (
+const ProblemHistoryItem: React.FC<ProblemHistoryItemProps> = ({ problem, index, onComplete, darkMode }) => (
     <div className={`flex items-center justify-between p-4 rounded-lg transition-all ${problem.completed ? (darkMode ? 'bg-green-900/20' : 'bg-green-50') : (darkMode ? 'bg-gray-700' : 'bg-gray-50')}`}>
         <div className="flex items-center gap-4">
             <span className={`text-sm font-medium px-2 py-1 rounded ${darkMode ? 'bg-gray-600' : 'bg-gray-200'}`}>
@@ -479,7 +524,7 @@ const ProblemHistoryItem = ({ problem, index, onComplete, darkMode }: any) => (
     </div>
 );
 
-const PlatformTag = ({ platform, darkMode }: { platform: string, darkMode: boolean }) => {
+const PlatformTag: React.FC<PlatformTagProps> = ({ platform, darkMode }) => {
     const baseStyle = "text-xs px-2 py-1 rounded-full ";
     const lightModeColors: { [key: string]: string } = {
         'LeetCode': 'bg-yellow-100 text-yellow-800',
